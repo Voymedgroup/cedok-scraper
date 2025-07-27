@@ -1,53 +1,47 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 
-module.exports = async function (req, res) {
+module.exports = async (req, res) => {
   const { url } = req.query;
 
-  if (!url || !url.startsWith('https://www.cedok.cz')) {
-    return res.status(400).json({ error: 'Chybná nebo chybějící URL.' });
+  if (!url || !url.includes('cedok.cz')) {
+    return res.status(400).json({ error: 'URL musí být z domény www.cedok.cz' });
   }
 
   try {
-    const parsedUrl = new URL(url);
-    const tripId = parsedUrl.searchParams.get('id');
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0' // kvůli ochraně proti botům
+      }
+    });
 
-    if (!tripId) {
-      return res.status(400).json({ error: 'URL neobsahuje platný parametr id.' });
-    }
+    const html = response.data;
+    const $ = cheerio.load(html);
 
-    const apiUrl = `https://www.cedok.cz/api/trips/preview?id=${tripId}`;
-    const response = await axios.get(apiUrl);
-    const data = response.data;
+    const title = $('h1').first().text().trim();
+    const destination = $('meta[property="og:description"]').attr('content') || '';
+    const rawPrice = $('.ProductDetailHeader__price').first().text().replace(/\s+/g, ' ').trim();
+    const departureDate = $('.TripDetail__headerInfo .TripDetail__item').eq(0).text().trim();
+    const nights = $('.TripDetail__headerInfo .TripDetail__item').eq(1).text().trim();
+    const board = $('.TripDetail__headerInfo .TripDetail__item').eq(2).text().trim();
 
-    if (!data || !data.product || !data.departureDate) {
-      return res.status(404).json({ error: 'Nepodařilo se načíst údaje o zájezdu.' });
-    }
+    const numericPrice = parseInt(rawPrice.replace(/[^\d]/g, '')) || 0;
+    const priceTotal = numericPrice ? rawPrice : '';
+    const pricePerPerson = numericPrice ? Math.round(numericPrice / 2) + ' Kč' : null;
 
-    const title = data.product.name || 'Neznámý hotel';
-    const destination = `${data.product.country?.name || ''} – ${data.product.resort?.name || ''}`;
-    const departureDate = data.departureDate.split('T')[0];
-    const nights = data.nights + ' nocí';
-    const stars = data.product.stars?.toString() || '–';
-    const board = data.board?.name || 'neuvedeno';
-    const priceTotal = data.price?.formatted || 'neuvedeno';
-    const pricePerPerson = data.price?.value
-      ? Math.round(data.price.value / 2) + ' Kč'
-      : null;
-
-    res.status(200).json({
+    res.json({
       originalUrl: url,
       title,
       destination,
       departureDate,
       nights,
-      stars,
       board,
       priceTotal,
       pricePerPerson
     });
 
   } catch (error) {
-    console.error('Chyba:', error.message);
-    res.status(500).json({ error: 'Nepodařilo se načíst data z Čedok API.' });
+    console.error(error.message);
+    res.status(500).json({ error: 'Nepodařilo se načíst nebo zpracovat stránku.' });
   }
 };
