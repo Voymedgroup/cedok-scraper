@@ -3,7 +3,6 @@ const axios = require('axios');
 module.exports = async function (req, res) {
   try {
     const rawUrl = req.query.url;
-    const part = parseInt(req.query.part || '1', 10);
 
     if (!rawUrl) {
       return res.status(400).json({ error: 'Chybí parametr "url".' });
@@ -22,22 +21,17 @@ module.exports = async function (req, res) {
     });
 
     const html = response.data;
+
+    // Rozdělíme HTML na části (např. po 150000 znaků)
     const chunkSize = 150000;
-
-    const totalParts = Math.ceil(html.length / chunkSize);
-
-    if (part < 1 || part > totalParts) {
-      return res.status(400).json({ error: `Part musí být mezi 1 a ${totalParts}` });
+    const chunks = [];
+    for (let i = 0; i < html.length; i += chunkSize) {
+      chunks.push(html.slice(i, i + chunkSize));
     }
-
-    const start = (part - 1) * chunkSize;
-    const end = start + chunkSize;
 
     return res.status(200).json({
       originalUrl: decodedUrl,
-      part,
-      totalParts,
-      content: html.slice(start, end)
+      chunks // např. [část1, část2, část3]
     });
 
   } catch (err) {
