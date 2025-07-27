@@ -1,4 +1,5 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 module.exports = async function (req, res) {
   try {
@@ -21,17 +22,29 @@ module.exports = async function (req, res) {
     });
 
     const html = response.data;
+    const $ = cheerio.load(html);
 
-    // Rozdělíme HTML na části (např. po 150000 znaků)
-    const chunkSize = 150000;
-    const chunks = [];
-    for (let i = 0; i < html.length; i += chunkSize) {
-      chunks.push(html.slice(i, i + chunkSize));
+    // Najdeme embedded JSON ve <script id="__NEXT_DATA__">
+    const jsonScript = $('#__NEXT_DATA__').html();
+
+    if (!jsonScript) {
+      return res.status(500).json({ error: 'Embedded JSON nenalezen.' });
+    }
+
+    const jsonData = JSON.parse(jsonScript);
+
+    // Teď můžeme extrahovat, co potřebujeme
+    const hotelData = jsonData?.props?.pageProps?.hotel || null;
+
+    if (!hotelData) {
+      return res.status(500).json({ error: 'Hotelová data nebyla nalezena v JSONu.' });
     }
 
     return res.status(200).json({
       originalUrl: decodedUrl,
-      chunks // např. [část1, část2, část3]
+      hotelName: hotelData.name,
+      priceFrom: hotelData.priceFrom,
+      hotelData
     });
 
   } catch (err) {
