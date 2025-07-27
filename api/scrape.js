@@ -1,4 +1,5 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 module.exports = async function (req, res) {
   try {
@@ -18,30 +19,25 @@ module.exports = async function (req, res) {
       headers: {
         'User-Agent': 'Mozilla/5.0'
       },
-      // Limituj velikost odpovědi, aby se server nezhroutil
-      maxContentLength: 2 * 1024 * 1024, // 2 MB
-      timeout: 10000 // 10s timeout
+      timeout: 10000
     });
 
-    const html = response.data;
+    // Načti celý HTML dokument
+    const $ = cheerio.load(response.data);
 
-    // Volitelně zkrať obsah pro GPT, např. na prvních 300 000 znaků
-    const trimmedHtml = html.length > 300000 ? html.slice(0, 300000) : html;
+    // Získej pouze <body>
+    const bodyHtml = $('body').html() || '';
+
+    // Omez velikost na max. 300 000 znaků pro bezpečnost
+    const trimmed = bodyHtml.length > 300000 ? bodyHtml.slice(0, 300000) : bodyHtml;
 
     return res.status(200).json({
       originalUrl: decodedUrl,
-      html: trimmedHtml
+      html: trimmed
     });
 
   } catch (err) {
     console.error('SCRAPE ERROR:', err.message);
-
-    if (err.response) {
-      return res.status(err.response.status).json({
-        error: `HTTP chyba ${err.response.status} při načítání stránky.`
-      });
-    }
-
     return res.status(500).json({
       error: 'Nepodařilo se načíst nebo zpracovat stránku.',
       details: err.message
