@@ -1,9 +1,9 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
 
 module.exports = async function (req, res) {
   try {
     const rawUrl = req.query.url;
+    const part = parseInt(req.query.part || '1', 10);
 
     if (!rawUrl) {
       return res.status(400).json({ error: 'Chybí parametr "url".' });
@@ -22,27 +22,22 @@ module.exports = async function (req, res) {
     });
 
     const html = response.data;
-    const $ = cheerio.load(html);
+    const chunkSize = 150000;
 
-    const title = $('title').text();
-    const metaDescription = $('meta[name="description"]').attr('content') || null;
+    const totalParts = Math.ceil(html.length / chunkSize);
 
-    const h1 = $('h1').map((i, el) => $(el).text()).get();
-    const h2 = $('h2').map((i, el) => $(el).text()).get();
-    const h3 = $('h3').map((i, el) => $(el).text()).get();
+    if (part < 1 || part > totalParts) {
+      return res.status(400).json({ error: `Part musí být mezi 1 a ${totalParts}` });
+    }
 
-    const paragraphs = $('p').map((i, el) => $(el).text()).get().slice(0, 5); // jen prvních 5 odstavců
+    const start = (part - 1) * chunkSize;
+    const end = start + chunkSize;
 
     return res.status(200).json({
       originalUrl: decodedUrl,
-      title,
-      metaDescription,
-      headings: {
-        h1,
-        h2,
-        h3
-      },
-      paragraphs
+      part,
+      totalParts,
+      content: html.slice(start, end)
     });
 
   } catch (err) {
