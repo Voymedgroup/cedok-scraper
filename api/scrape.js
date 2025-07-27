@@ -1,10 +1,11 @@
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 module.exports = async function (req, res) {
   const { url } = req.query;
 
   if (!url || !url.includes('cedok.cz')) {
-    return res.status(400).json({ error: 'Zadej platnou URL ze stránky Čedoku.' });
+    return res.status(400).json({ error: 'Zadej platnou URL z webu Čedoku.' });
   }
 
   try {
@@ -15,29 +16,26 @@ module.exports = async function (req, res) {
     });
 
     const html = response.data;
+    const $ = cheerio.load(html);
 
-    // 🧠 Hledáme objekt window.__INITIAL_STATE__ = {...};
-    const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/s);
+    const scriptContent = $('#__NEXT_DATA__').html();
 
-    if (!stateMatch || !stateMatch[1]) {
-      return res.status(404).json({ error: 'Nepodařilo se najít data ve stránce.' });
+    if (!scriptContent) {
+      return res.status(404).json({ error: 'Data ve stránce nebyla nalezena.' });
     }
 
-    let state;
-    try {
-      state = JSON.parse(stateMatch[1]);
-    } catch (e) {
-      return res.status(500).json({ error: 'Chyba při parsování dat.' });
+    const data = JSON.parse(scriptContent);
+    const product = data?.props?.pageProps?.product;
+
+    if (!product) {
+      return res.status(404).json({ error: 'Produktová data nebyla nalezena.' });
     }
 
-    // 🧠 Zkusíme najít první zájezd v objektu
-    const detailData = state?.productDetail?.product || {};
-
-    const title = detailData?.name || 'Neznámý hotel';
-    const priceTotal = detailData?.price?.current || '';
-    const departureDate = detailData?.datum || '';
-    const nights = detailData?.nights ? `${detailData.nights} nocí` : '';
-    const board = detailData?.board || '';
+    const title = product.name || 'Neznámý hotel';
+    const priceTotal = product.price?.current || 'neuvedeno';
+    const departureDate = product.date || product.datum || '';
+    const nights = product.nights ? `${product.nights} nocí` : '';
+    const board = product.board || '';
 
     const numericPrice = parseInt(priceTotal.replace(/[^\d]/g, '')) || 0;
     const pricePerPerson = numericPrice ? Math.round(numericPrice / 2) + ' Kč' : null;
@@ -53,7 +51,7 @@ module.exports = async function (req, res) {
     });
 
   } catch (error) {
-    console.error('Chyba:', error.message);
+    console.error('Scraping error:', error.message);
     res.status(500).json({ error: 'Nepodařilo se načíst nebo zpracovat stránku.' });
   }
 };
