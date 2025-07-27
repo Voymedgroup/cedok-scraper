@@ -1,5 +1,4 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
 
 module.exports = async function (req, res) {
   const { url } = req.query;
@@ -16,39 +15,34 @@ module.exports = async function (req, res) {
     });
 
     const html = response.data;
-    const $ = cheerio.load(html);
 
-    let jsonData = null;
+    // 🧠 Hledáme objekt window.__INITIAL_STATE__ = {...};
+    const stateMatch = html.match(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/s);
 
-    $('script[type="application/ld+json"]').each((i, el) => {
-      const content = $(el).html();
-
-      try {
-        const parsed = JSON.parse(content);
-
-        // Např. hledáme objekt typu Product, kde bude "name", "price" atd.
-        if (parsed && parsed.name && parsed.offers?.price) {
-          jsonData = parsed;
-        }
-      } catch (err) {
-        // ignoruj chyby v parse
-      }
-    });
-
-    if (!jsonData) {
-      return res.status(404).json({ error: 'Data nebyla nalezena ve stránce.' });
+    if (!stateMatch || !stateMatch[1]) {
+      return res.status(404).json({ error: 'Nepodařilo se najít data ve stránce.' });
     }
 
-    const title = jsonData.name;
-    const priceTotal = jsonData.offers?.price + ' Kč';
-    const departureDate = jsonData.validFrom || '';
-    const nights = jsonData.description?.match(/(\d+)\s+nocí/)?.[1] + ' nocí' || '';
-    const board = jsonData.description?.match(/Strava:\s*([^\.\n]+)/)?.[1] || '';
+    let state;
+    try {
+      state = JSON.parse(stateMatch[1]);
+    } catch (e) {
+      return res.status(500).json({ error: 'Chyba při parsování dat.' });
+    }
 
-    const numericPrice = parseInt(jsonData.offers?.price) || 0;
+    // 🧠 Zkusíme najít první zájezd v objektu
+    const detailData = state?.productDetail?.product || {};
+
+    const title = detailData?.name || 'Neznámý hotel';
+    const priceTotal = detailData?.price?.current || '';
+    const departureDate = detailData?.datum || '';
+    const nights = detailData?.nights ? `${detailData.nights} nocí` : '';
+    const board = detailData?.board || '';
+
+    const numericPrice = parseInt(priceTotal.replace(/[^\d]/g, '')) || 0;
     const pricePerPerson = numericPrice ? Math.round(numericPrice / 2) + ' Kč' : null;
 
-    res.json({
+    res.status(200).json({
       originalUrl: url,
       title,
       departureDate,
@@ -59,7 +53,7 @@ module.exports = async function (req, res) {
     });
 
   } catch (error) {
-    console.error('Scraper error:', error.message);
+    console.error('Chyba:', error.message);
     res.status(500).json({ error: 'Nepodařilo se načíst nebo zpracovat stránku.' });
   }
 };
