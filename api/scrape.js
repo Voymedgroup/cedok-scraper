@@ -1,11 +1,11 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-module.exports = async (req, res) => {
+module.exports = async function (req, res) {
   const { url } = req.query;
 
   if (!url || !url.startsWith('https://www.cedok.cz')) {
-    return res.status(400).json({ error: 'URL musí být z domény www.cedok.cz' });
+    return res.status(400).json({ error: 'Chybná nebo chybějící URL.' });
   }
 
   try {
@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Chyba při zpracování:', error.message);
-    res.status(500).json({ error: 'Nepodařilo se načíst stránku nebo změnili strukturu HTML.' });
+    console.error(error.message);
+    res.status(500).json({ error: 'Nepodařilo se zpracovat stránku.' });
   }
 };
