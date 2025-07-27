@@ -1,7 +1,7 @@
-import axios from 'axios';
-import * as cheerio from 'cheerio';
+const axios = require('axios');
+const cheerio = require('cheerio');
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   const { url } = req.query;
 
   if (!url || !url.startsWith('https://www.cedok.cz')) {
@@ -37,6 +37,7 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
+    console.error('Chyba při zpracování:', error.message);
     res.status(500).json({ error: 'Nepodařilo se načíst stránku nebo změnili strukturu HTML.' });
   }
-}
+};
