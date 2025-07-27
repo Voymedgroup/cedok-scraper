@@ -7,14 +7,14 @@ module.exports = async function (req, res) {
     return res.status(400).json({ error: 'Chybná nebo chybějící URL.' });
   }
 
-  const idMatch = url.match(/[?&]id=([^&]+)/);
-  if (!idMatch) {
-    return res.status(400).json({ error: 'URL neobsahuje parametr id.' });
-  }
-
-  const tripId = idMatch[1];
-
   try {
+    const parsedUrl = new URL(url);
+    const tripId = parsedUrl.searchParams.get('id');
+
+    if (!tripId) {
+      return res.status(400).json({ error: 'URL neobsahuje platný parametr id.' });
+    }
+
     const apiUrl = `https://www.cedok.cz/api/trips/preview?id=${tripId}`;
     const response = await axios.get(apiUrl);
     const data = response.data;
