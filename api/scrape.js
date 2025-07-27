@@ -9,19 +9,28 @@ module.exports = async function (req, res) {
   }
 
   try {
-    const response = await axios.get(url);
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0' // aby Čedok pustil request
+      }
+    });
     const html = response.data;
     const $ = cheerio.load(html);
 
     const title = $('h1').first().text().trim();
-    const destination = $('.TripDetail__titleDestination').text().trim();
-    const priceTotal = $('[data-testid="price"]').first().text().trim();
-    const board = $('[data-testid="mealType"]').first().text().trim();
-    const stars = $('[data-testid="stars"]').first().text().trim() || '–';
+
+    const destination = $('[data-testid="trip-header"]').find('span').first().text().trim();
     const departureDate = $('[data-testid="trip-date"]').first().text().trim();
     const nights = $('[data-testid="trip-nights"]').first().text().trim();
+    const stars = $('[data-testid="stars"]').first().text().trim() || '–';
+    const board = $('[data-testid="mealType"]').first().text().trim();
 
-    const numericPrice = parseInt(priceTotal.replace(/[^\d]/g, '')) || 0;
+    // Fix ceny: vezmeme vždy tu s class "price--highlighted"
+    const priceText = $('.price--highlighted').first().text().replace(/\s+/g, ' ').trim();
+
+    // Vyčistíme cenu
+    const numericPrice = parseInt(priceText.replace(/[^\d]/g, '')) || 0;
+    const priceTotal = priceText;
     const pricePerPerson = numericPrice ? Math.round(numericPrice / 2) + ' Kč' : null;
 
     res.status(200).json({
