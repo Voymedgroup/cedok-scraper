@@ -1,5 +1,4 @@
 const axios = require('axios');
-const cheerio = require('cheerio');
 
 module.exports = async function (req, res) {
   try {
@@ -9,38 +8,30 @@ module.exports = async function (req, res) {
       return res.status(400).json({ error: 'Chybí parametr "url".' });
     }
 
+    // Dekóduj URL – protože při předání přes query string bude zakódovaná
     const decodedUrl = decodeURIComponent(rawUrl);
 
+    // Kontrola domény
     if (!decodedUrl.startsWith('https://www.cedok.cz/')) {
-      return res.status(400).json({ error: 'URL musí být z domény www.cedok.cz.' });
+      return res.status(400).json({ error: 'URL musí začínat na https://www.cedok.cz/' });
     }
 
+    // Stáhni obsah stránky
     const response = await axios.get(decodedUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0'
-      },
-      timeout: 10000
+      }
     });
 
-    // Načti celý HTML dokument
-    const $ = cheerio.load(response.data);
-
-    // Získej pouze <body>
-    const bodyHtml = $('body').html() || '';
-
-    // Omez velikost na max. 300 000 znaků pro bezpečnost
-    const trimmed = bodyHtml.length > 300000 ? bodyHtml.slice(0, 300000) : bodyHtml;
+    const html = response.data;
 
     return res.status(200).json({
       originalUrl: decodedUrl,
-      html: trimmed
+      html
     });
 
   } catch (err) {
-    console.error('SCRAPE ERROR:', err.message);
-    return res.status(500).json({
-      error: 'Nepodařilo se načíst nebo zpracovat stránku.',
-      details: err.message
-    });
+    console.error('Chyba:', err.message);
+    return res.status(500).json({ error: 'Nepodařilo se načíst nebo zpracovat stránku.' });
   }
 };
