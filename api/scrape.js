@@ -1,14 +1,23 @@
 const axios = require('axios');
 
 module.exports = async function (req, res) {
-  const { url } = req.query;
-
-  if (!url || !url.includes('cedok.cz')) {
-    return res.status(400).json({ error: 'Zadej platnou URL ze stránky Čedoku.' });
-  }
-
   try {
-    const response = await axios.get(url, {
+    const rawUrl = req.query.url;
+
+    if (!rawUrl) {
+      return res.status(400).json({ error: 'Chybí parametr "url".' });
+    }
+
+    // Dekóduj URL – protože při předání přes query string bude zakódovaná
+    const decodedUrl = decodeURIComponent(rawUrl);
+
+    // Kontrola domény
+    if (!decodedUrl.startsWith('https://www.cedok.cz/')) {
+      return res.status(400).json({ error: 'URL musí začínat na https://www.cedok.cz/' });
+    }
+
+    // Stáhni obsah stránky
+    const response = await axios.get(decodedUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0'
       }
@@ -16,13 +25,11 @@ module.exports = async function (req, res) {
 
     const html = response.data;
 
-    res.status(200).json({
-      originalUrl: url,
+    return res.status(200).json({
+      originalUrl: decodedUrl,
       html
     });
 
-  } catch (error) {
-    console.error('Chyba při stahování HTML:', error.message);
-    res.status(500).json({ error: 'Nepodařilo se načíst stránku.' });
-  }
-};
+  } catch (err) {
+    console.error('Chyba:', err.message);
+    return res.status(500).json({ error: 'Nepodařilo se načíst nebo
